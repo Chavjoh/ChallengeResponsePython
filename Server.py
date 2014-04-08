@@ -40,10 +40,6 @@ import argparse
 import re
 import uuid
 
-from Crypto.Cipher import AES
-from Crypto import Random
-import base64, os
-
 import hashlib
 from collections import OrderedDict
 
@@ -70,13 +66,16 @@ def helloRequest(thread):
 
 def loginRequest(thread):
 	user = getArguments(thread.data['message'])[0]
-	#userManager = UserManager.Instance()
-	#if user in userManager.users.keys():
-	thread.data['token'] = str(uuid.uuid4())
-	thread.send("CHALLENGE " + thread.data['token'])
+	if user in Database.user.keys():
+		thread.data['login'] = user
+		thread.data['token'] = str(uuid.uuid4())
+		thread.send("CHALLENGE " + thread.data['token'])
+	else:
+		thread.send("MSG Indicated user not found")
 	
 def challengeRequest(thread):
-	passwordMessage = thread.data['token'] + "password" # TODO load PWD
+	passwordMessage = thread.data['token'] \
+	                + Database.user[thread.data['login']]
 	hashObject = hashlib.sha512(passwordMessage.encode('UTF-8'))
 	hexDigest = hashObject.hexdigest() 
 	
@@ -85,21 +84,23 @@ def challengeRequest(thread):
 	
 	# Test connection
 	if hexDigest == hashRequest:
-		thread.data['login'] = True
+		thread.data['isLogged'] = True
 		thread.send("MSG Login success.")
 	else:
-		thread.data['token'] = ""
 		thread.send("MSG Login failure.")
 	
+	# Reset token
+	thread.data['token'] = ""
+	
 def isLoggedRequest(thread):
-	if 'login' in thread.data.keys():
+	if 'isLogged' in thread.data.keys():
 		thread.send("MSG You are logged in.")
 	else:
 		thread.send("MSG You are not logged in.")
 
 def logoutRequest(thread):
-	if 'login' in thread.data.keys():
-		del thread.data['login']
+	if 'isLogged' in thread.data.keys():
+		del thread.data['isLogged']
 		thread.send("MSG You are now logged out.")
 	else:
 		thread.send("MSG You are not logged in.")
@@ -116,9 +117,24 @@ def notFoundRequest(thread):
 #                                   CLASSES                                    #
 #                                                                              #
 #------------------------------------------------------------------------------#
+class Database:
+	"""Contains data used in application"""
+	user = {}
+	
+	@staticmethod
+	def load(databaseFile):
+		# Open database file
+		with open(databaseFile) as file:
+			# Read each line (format "user:password")
+			for line in file:
+				# Delete new line character and split
+				data = line.rstrip('\n').split(':')
+				
+				if len(data) == 2:
+					Database.user[data[0]] = data[1]
 
 class ThreadClient(threading.Thread):
-	'''Manage each client connection to the server in a new thread'''
+	"""Manage each client connection to the server in a new thread"""
 	
 	functionArray = OrderedDict([
 		(r"HELLO", helloRequest),
@@ -206,6 +222,13 @@ if __name__ == '__main__':
 	host = '127.0.0.1'
 	database = sys.argv[1]
 	port = int(sys.argv[2]) if argsCount == 3 else 1991
+	
+	# Load user database
+	try:
+		Database.load(database)
+	except FileNotFoundError:
+		print("Database user not found")
+		sys.exit(0)
 	
 	# Server initialization
 	serverSocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
