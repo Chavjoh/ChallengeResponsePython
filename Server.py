@@ -1,4 +1,4 @@
-#!/usr/bin/python
+﻿#!/usr/bin/python
 # -*- coding: utf-8 -*-
 
 #------------------------------------------------------------------------------#
@@ -104,8 +104,8 @@ def logoutRequest(thread):
 		thread.connection.send(prepareString("MSG You are not logged in."))
 	
 def closeConnectionRequest(thread):
-	thread.connection.send(prepareString("CLOSE CONFIRM"))
 	thread.closeConnection = True
+	thread.connection.send(prepareString("CLOSE CONFIRM"))
 
 def notFoundRequest(thread):
 	thread.connection.send(prepareString("MSG Command not found"))
