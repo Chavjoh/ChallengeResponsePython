@@ -69,7 +69,7 @@ def helloRequest(thread):
 	thread.send("MSG Hello from " + socket.gethostname())
 
 def loginRequest(thread):
-	user = getArguments(thread.message)[0]
+	user = getArguments(thread.data['message'])[0]
 	#userManager = UserManager.Instance()
 	#if user in userManager.users.keys():
 	thread.data['token'] = str(uuid.uuid4())
@@ -81,7 +81,7 @@ def challengeRequest(thread):
 	hexDigest = hashObject.hexdigest() 
 	
 	# Get hash from received message
-	hashRequest = getArguments(thread.message)[0]
+	hashRequest = getArguments(thread.data['message'])[0]
 	
 	# Test connection
 	if hexDigest == hashRequest:
@@ -134,17 +134,17 @@ class ThreadClient(threading.Thread):
 		threading.Thread.__init__(self)
 		self.connection = connection
 		self.closeConnection = False
+		
 		self.data = {}
-		self.message = ""
-		self.threadName = ""
+		self.data['message'] = ""
+		
+		print("%s connected" % self.getName())
 	
 	def send(self, message):
-		print("%s -> %s" % (self.threadName, message))
+		print("%s -> %s" % (self.getName(), message))
 		self.connection.send(prepareString(message))
 
 	def run(self):
-		self.threadName = self.getName()
-		
 		try:
 			while not self.closeConnection:
 				
@@ -152,24 +152,24 @@ class ThreadClient(threading.Thread):
 				
 				if character == b'\n':
 				
-					print("%s <- %s" % (self.threadName, self.message))
+					print("%s <- %s" % (self.getName(), self.data['message']))
 					
 					for regex, function in ThreadClient.functionArray.items():
-						if re.match(regex, self.message):
+						if re.match(regex, self.data['message']):
 							function(self)
 							break
 					
-					self.message = ""
+					self.data['message'] = ""
 				else:
-					self.message += character.decode('UTF-8')
+					self.data['message'] += character.decode('UTF-8')
 				
 		except ConnectionResetError:
-			print("Connection reset by client.")
+			print("%s has reset connection" % self.getName())
 		
 		# Close connection
 		self.connection.close()
-		del connectionList[self.threadName]
-		print("Client %s disconnected." % self.threadName)
+		del connectionList[self.getName()]
+		print("%s disconnected" % self.getName())
 
 #------------------------------------------------------------------------------#
 #                                                                              #
@@ -235,7 +235,7 @@ if __name__ == '__main__':
 			connectionList[id] = connection
 			
 			# Send a welcome message
-			connection.send(prepareString("MSG Welcome aboard !"))
+			thread.send("MSG Welcome aboard !")
 	
 	except KeyboardInterrupt:
 		print("Server shut down")
