@@ -45,6 +45,7 @@ from Crypto import Random
 import base64, os
 
 import hashlib
+from collections import OrderedDict
 
 #------------------------------------------------------------------------------#
 #                                                                              #
@@ -65,18 +66,18 @@ def getArguments(message):
 #------------------------------------------------------------------------------#
 
 def helloRequest(thread):
-	thread.connection.send(prepareString("MSG Hello from the server !"))
+	thread.send("MSG Hello from " + socket.gethostname())
 
 def loginRequest(thread):
 	user = getArguments(thread.message)[0]
 	#userManager = UserManager.Instance()
 	#if user in userManager.users.keys():
 	thread.data['token'] = str(uuid.uuid4())
-	thread.connection.send(prepareString("CHALLENGE " + thread.data['token']))
+	thread.send("CHALLENGE " + thread.data['token'])
 	
 def challengeRequest(thread):
 	passwordMessage = thread.data['token'] + "password" # TODO load PWD
-	hashObject = hashlib.sha256(passwordMessage.encode('UTF-8'))
+	hashObject = hashlib.sha512(passwordMessage.encode('UTF-8'))
 	hexDigest = hashObject.hexdigest() 
 	
 	# Get hash from received message
@@ -85,30 +86,30 @@ def challengeRequest(thread):
 	# Test connection
 	if hexDigest == hashRequest:
 		thread.data['login'] = True
-		thread.connection.send(prepareString("LOGIN SUCCESS"))
+		thread.send("MSG Login success.")
 	else:
 		thread.data['token'] = ""
-		thread.connection.send(prepareString("LOGIN FAILURE"))
+		thread.send("MSG Login failure.")
 	
 def isLoggedRequest(thread):
 	if 'login' in thread.data.keys():
-		thread.connection.send(prepareString("MSG You are logged in."))
+		thread.send("MSG You are logged in.")
 	else:
-		thread.connection.send(prepareString("MSG You are not logged in."))
+		thread.send("MSG You are not logged in.")
 
 def logoutRequest(thread):
 	if 'login' in thread.data.keys():
 		del thread.data['login']
-		thread.connection.send(prepareString("MSG You are now logged out."))
+		thread.send("MSG You are now logged out.")
 	else:
-		thread.connection.send(prepareString("MSG You are not logged in."))
+		thread.send("MSG You are not logged in.")
 	
 def closeConnectionRequest(thread):
 	thread.closeConnection = True
-	thread.connection.send(prepareString("CLOSE CONFIRM"))
+	thread.send("CLOSE CONFIRM")
 
 def notFoundRequest(thread):
-	thread.connection.send(prepareString("MSG Command not found"))
+	thread.send("MSG Command not found")
 
 #------------------------------------------------------------------------------#
 #                                                                              #
@@ -119,15 +120,15 @@ def notFoundRequest(thread):
 class ThreadClient(threading.Thread):
 	'''Manage each client connection to the server in a new thread'''
 	
-	functionArray = {
-		r"HELLO": helloRequest,
-		r"LOGIN .*": loginRequest, 
-		r"CHALLENGE .*": challengeRequest, 
-		r"IS_LOGGED": isLoggedRequest,
-		r"LOGOUT": logoutRequest,
-		r"CLOSE": closeConnectionRequest,
-		r".*": notFoundRequest,
-	} 
+	functionArray = OrderedDict([
+		(r"HELLO", helloRequest),
+		(r"LOGIN .*", loginRequest), 
+		(r"CHALLENGE .*", challengeRequest), 
+		(r"IS_LOGGED", isLoggedRequest),
+		(r"LOGOUT", logoutRequest),
+		(r"CLOSE", closeConnectionRequest),
+		(r".*", notFoundRequest),
+	])
 	
 	def __init__(self, connection):
 		threading.Thread.__init__(self)
@@ -135,34 +136,40 @@ class ThreadClient(threading.Thread):
 		self.closeConnection = False
 		self.data = {}
 		self.message = ""
+		self.threadName = ""
+	
+	def send(self, message):
+		print("%s -> %s" % (self.threadName, message))
+		self.connection.send(prepareString(message))
 
 	def run(self):
-		threadName = self.getName()
-
+		self.threadName = self.getName()
+		
 		try:
 			while not self.closeConnection:
+				
 				character = self.connection.recv(1)
 				
 				if character == b'\n':
 				
+					print("%s <- %s" % (self.threadName, self.message))
+					
 					for regex, function in ThreadClient.functionArray.items():
 						if re.match(regex, self.message):
 							function(self)
 							break
 					
-					print("%s> %s" % (threadName, self.message))
-					
 					self.message = ""
 				else:
-					self.message += character.decode("utf-8")
-		
+					self.message += character.decode('UTF-8')
+				
 		except ConnectionResetError:
 			print("Connection reset by client.")
 		
 		# Close connection
 		self.connection.close()
-		del connectionList[threadName]
-		print("Client %s disconnected." % threadName)
+		del connectionList[self.threadName]
+		print("Client %s disconnected." % self.threadName)
 
 #------------------------------------------------------------------------------#
 #                                                                              #
@@ -181,13 +188,13 @@ if __name__ == '__main__':
 	parser.add_argument(
 		'database', 
 		type=str,
-		help='Database of users and password to use for challenge response.'
+		help='Database of users and password to use.'
 	)
 	parser.add_argument(
 		'port', 
 		nargs='+',
 		type=str,
-		help='Port to used for the server.'
+		help='Port to use to receive connections (Default: 1991).'
 	)
 
 	# Show help if one of the arguments is missing
@@ -205,7 +212,7 @@ if __name__ == '__main__':
 	try:
 		serverSocket.bind((host, port))
 	except socket.error:
-		print("The connection socket to the selected address has failed.")
+		print("Socket creation failed, maybe the port is already in use ?")
 		sys.exit()
 	
 	# Listen new connection
