@@ -49,6 +49,21 @@ user1:password1
 user2:password2
 ...
 ```
+
+## Strengths
+
+* Password is not sent on the network, we only use it to hash a unique value and proove that we know the password.
+
+## Weaknesses
+
+* Need to store the password and not a hash of the password. We can use a hash of the password instead but it's not a solution (we only move the problem) : The hash is now the key to obtain access to the system, and it's stored clearly on the server. But we can use a hash to protect user original password, for example if it's used on other services or websites.
+
+## Security improvement
+
+* Encrypt exchanges with the common password known to both parties.
+* Store hash instead of the password on the server side.
+* Implement a secure way to send the password when registering the user on the server.
+
 ## Feedback
 
 Don't hesitate to fork this project, improve it and make a pull request.
