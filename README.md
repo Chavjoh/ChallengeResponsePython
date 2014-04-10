@@ -64,6 +64,10 @@ user2:password2
 * Store hash instead of the password on the server side.
 * Implement a secure way to send the password when registering the user on the server.
 
+## Client-Server architecture
+
+Based on the project [ClientServerPython](https://github.com/Chavjoh/ClientServerPython) by the same author.
+
 ## Feedback
 
 Don't hesitate to fork this project, improve it and make a pull request.
